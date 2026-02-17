@@ -22,5 +22,33 @@ export interface Tyre {
     storeId: string;
     brand: Brand;
     size: string; // e.g., "205/55 R16"
+    type?: string; // e.g., "Earthone", "Geolander"
     quantity: number;
+}
+
+export interface WarrantyRecord {
+    id: string;
+    buyerName: string;
+    mobile: string;
+    brand: string;
+    size: string;
+    type: string;
+    quantity: number;
+    purchaseDate: string;
+    warrantyDate: string;
+    status: 'Pending' | 'Done';
+}
+
+export interface ClaimRecord {
+    id: string;
+    buyerName: string;
+    mobile: string;
+    brand: string;
+    size: string;
+    type: string;
+    quantity: number;
+    warrantyDate: string; // The original warranty date
+    claimDate: string;    // The date the claim was made
+    defectType: string;
+    status: 'Pending' | 'Accepted' | 'Rejected';
 }

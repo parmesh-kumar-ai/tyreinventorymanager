@@ -11,8 +11,10 @@ export const useBackup = (
     useEffect(() => {
         const interval = setInterval(async () => {
             const token = sessionStorage.getItem('google_access_token');
-            if (!token) {
-                console.log('Skipping backup: No Google Access Token');
+            const autoBackupEnabled = localStorage.getItem('autoBackupEnabled') === 'true';
+
+            if (!token || !autoBackupEnabled) {
+                // console.log('Skipping backup: No Token or Auto-Backup Disabled');
                 return;
             }
 
@@ -25,7 +27,7 @@ export const useBackup = (
 
             // Only backup if data changed
             if (currentData !== lastBackupData.current) {
-                console.log('Data changed, starting backup...');
+                console.log('Data changed, starting auto-backup...');
                 const success = await uploadToDrive(token, {
                     inventory,
                     stores,
@@ -36,13 +38,10 @@ export const useBackup = (
 
                 if (success) {
                     lastBackupData.current = currentData;
-                    console.log('Backup cycle completed.');
+                    console.log('Auto-backup cycle completed.');
                 }
-            } else {
-                console.log('Skipping backup: No changes detected');
             }
-
-        }, 60 * 1000); // 1 Minute
+        }, 30 * 60 * 1000); // 30 Minutes
 
         return () => clearInterval(interval);
     }, [inventory, stores, transactions, managedBrands]);

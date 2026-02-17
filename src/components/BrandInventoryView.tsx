@@ -1,24 +1,28 @@
 import { useMemo, useState } from 'react';
-import { useInventory } from '../hooks/useInventory';
+
 import { PREDEFINED_BRANDS } from '../constants';
 import InventoryList from './InventoryList';
 import { Package } from 'lucide-react';
 
-import type { Tyre } from '../types';
+import type { Tyre, Store } from '../types';
 import { Plus } from 'lucide-react';
 
 interface BrandInventoryViewProps {
     selectedBrand?: string | null;
+    inventory: Tyre[];
+    stores: Store[]; // Need Store type import? It's likely global or inferred from usage in InventoryList but strictly: import type { Store } from '../types'
+    managedBrands: string[];
     onEdit: (tyre: Tyre) => void;
+    onDeleteTyre: (id: string) => void;
     onAddTyre: () => void;
 }
 
-export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }: BrandInventoryViewProps) {
-    const { inventory, stores, deleteTyre, managedBrands } = useInventory();
+export default function BrandInventoryView({ selectedBrand, inventory, stores, managedBrands, onEdit, onDeleteTyre, onAddTyre }: BrandInventoryViewProps) {
 
     // Local Filters
     const [selectedRimSize, setSelectedRimSize] = useState<string>('');
     const [selectedStoreId, setSelectedStoreId] = useState<string>('');
+    const [selectedType, setSelectedType] = useState<string>('');
 
     // Derived Data for Filters
     const uniqueRimSizes = useMemo(() => {
@@ -29,6 +33,15 @@ export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }:
         });
         return Array.from(rims).sort();
     }, [inventory]);
+
+    const uniqueTypes = useMemo(() => {
+        const types = new Set<string>();
+        inventory.forEach(t => {
+            if (selectedBrand && t.brand !== selectedBrand) return;
+            if (t.type) types.add(t.type);
+        });
+        return Array.from(types).sort();
+    }, [inventory, selectedBrand]);
 
     const brandsToShow = useMemo(() => {
         if (selectedBrand) return [selectedBrand];
@@ -78,6 +91,17 @@ export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }:
                         {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                 </div>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>Filter by Type</label>
+                    <select
+                        value={selectedType}
+                        onChange={(e) => setSelectedType(e.target.value)}
+                        style={{ padding: '0.5rem', width: '100%', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}
+                    >
+                        <option value="">All Types</option>
+                        {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
@@ -87,7 +111,8 @@ export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }:
                         const isBrand = t.brand === brand;
                         const isRim = selectedRimSize ? t.size.toUpperCase().includes(selectedRimSize) : true;
                         const isStore = selectedStoreId ? t.storeId === selectedStoreId : true;
-                        return isBrand && isRim && isStore;
+                        const isType = selectedType ? t.type === selectedType : true;
+                        return isBrand && isRim && isStore && isType;
                     });
 
                     // Skip if empty AND filters are applied (to reduce clutter), or if specific brand selected and empty
@@ -132,7 +157,7 @@ export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }:
                                 stores={stores}
                                 onDelete={(id) => {
                                     if (window.confirm('Are you sure you want to delete this tyre?')) {
-                                        deleteTyre(id);
+                                        onDeleteTyre(id);
                                     }
                                 }}
                                 onEdit={onEdit}
@@ -145,7 +170,8 @@ export default function BrandInventoryView({ selectedBrand, onEdit, onAddTyre }:
                     const hasItems = inventory.some(t =>
                         t.brand === brand &&
                         (selectedRimSize ? t.size.toUpperCase().includes(selectedRimSize) : true) &&
-                        (selectedStoreId ? t.storeId === selectedStoreId : true)
+                        (selectedStoreId ? t.storeId === selectedStoreId : true) &&
+                        (selectedType ? t.type === selectedType : true)
                     );
                     return !hasItems;
                 }) && !selectedBrand && (

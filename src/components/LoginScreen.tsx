@@ -24,6 +24,8 @@ export default function LoginScreen() {
         }
     };
 
+
+
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -96,6 +98,8 @@ export default function LoginScreen() {
                     </div>
                 )}
 
+
+
                 {authMode === 'options' && (
                     <div className="auth-methods" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <button
@@ -130,6 +134,8 @@ export default function LoginScreen() {
                             Sign in with Email
                         </button>
 
+
+
                         <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#64748b' }}>
                             Don't have an account?{' '}
                             <button
@@ -141,6 +147,8 @@ export default function LoginScreen() {
                         </div>
                     </div>
                 )}
+
+
 
                 {(authMode === 'email-login' || authMode === 'email-signup') && (
                     <form onSubmit={handleEmailAuth} style={{ textAlign: 'left' }}>

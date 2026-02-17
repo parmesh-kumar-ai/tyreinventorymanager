@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { LayoutDashboard, Store, History, Tag, Settings, X, Plus, Trash2, UserCircle } from 'lucide-react';
+import { LayoutDashboard, Store, History, Tag, Settings, X, Plus, Trash2, UserCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
 import type { User } from 'firebase/auth';
 
 interface SidebarProps {
-    currentView: 'inventory' | 'stores' | 'history' | 'brand';
+    currentView: 'inventory' | 'stores' | 'history' | 'brand' | 'warranty' | 'claims';
     currentBrand?: string | null;
     brands: string[];
     user: User;
-    onViewChange: (view: 'inventory' | 'stores' | 'history' | 'brand') => void;
+    onViewChange: (view: 'inventory' | 'stores' | 'history' | 'brand' | 'warranty' | 'claims') => void;
     onBrandSelect: (brand: string) => void;
     onAddBrand: (brand: string) => void;
     onRemoveBrand: (brand: string) => void;
@@ -32,6 +32,8 @@ export default function Sidebar({
         { id: 'inventory', label: 'Inventory', icon: LayoutDashboard },
         { id: 'stores', label: 'Stores', icon: Store },
         { id: 'history', label: 'History', icon: History },
+        { id: 'warranty', label: 'Warranty', icon: ShieldCheck },
+        { id: 'claims', label: 'Claims', icon: AlertTriangle },
     ] as const;
 
     const handleAddBrand = (e: React.FormEvent) => {

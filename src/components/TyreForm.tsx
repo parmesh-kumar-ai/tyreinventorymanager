@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
-import type { Tyre } from '../types';
-import { useInventory } from '../hooks/useInventory';
+import type { Tyre, Store } from '../types';
 import { X } from 'lucide-react';
 
 interface TyreFormProps {
     initialData?: Tyre | null;
     onSubmit: (data: Omit<Tyre, 'id'>, date?: string) => void;
     onCancel: () => void;
+    stores: Store[];
+    managedBrands: string[];
+    inventory: Tyre[];
 }
 
-export default function TyreForm({ initialData, onSubmit, onCancel }: TyreFormProps) {
-    const { stores, managedBrands, inventory } = useInventory();
+export default function TyreForm({ initialData, onSubmit, onCancel, stores, managedBrands, inventory }: TyreFormProps) {
 
     // Compute all available brands for suggestions
     const availableBrands = Array.from(new Set([
@@ -23,6 +24,7 @@ export default function TyreForm({ initialData, onSubmit, onCancel }: TyreFormPr
         storeId: stores[0]?.id || '',
         brand: '', // Start empty to force user selection
         size: '',
+        type: '',
         quantity: 0,
         purchaseDate: new Date().toISOString().split('T')[0] // Default to today YYYY-MM-DD
     });
@@ -33,6 +35,7 @@ export default function TyreForm({ initialData, onSubmit, onCancel }: TyreFormPr
                 storeId: initialData.storeId,
                 brand: initialData.brand,
                 size: initialData.size,
+                type: initialData.type || '',
                 quantity: initialData.quantity,
                 purchaseDate: new Date().toISOString().split('T')[0]
             });
@@ -43,6 +46,7 @@ export default function TyreForm({ initialData, onSubmit, onCancel }: TyreFormPr
                 storeId: stores[0]?.id || '',
                 brand: '',
                 size: '',
+                type: '',
                 quantity: 0,
                 purchaseDate: new Date().toISOString().split('T')[0]
             }));
@@ -123,6 +127,16 @@ export default function TyreForm({ initialData, onSubmit, onCancel }: TyreFormPr
                             placeholder="205/55 R16"
                             value={formData.size}
                             onChange={e => setFormData({ ...formData, size: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label>Tyre Type (Optional)</label>
+                        <input
+                            type="text"
+                            placeholder="e.g., Earthone, Geolander"
+                            value={formData.type || ''}
+                            onChange={e => setFormData({ ...formData, type: e.target.value })}
                         />
                     </div>
 

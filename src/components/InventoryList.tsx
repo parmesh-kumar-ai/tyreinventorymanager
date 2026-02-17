@@ -32,6 +32,7 @@ export default function InventoryList({ inventory, stores, onEdit, onDelete }: I
                 <thead>
                     <tr>
                         <th>Brand</th>
+                        <th>Type</th>
                         <th>Size</th>
                         <th>Rim Size</th>
                         <th>Store</th>
@@ -43,6 +44,7 @@ export default function InventoryList({ inventory, stores, onEdit, onDelete }: I
                     {inventory.map((tyre) => (
                         <tr key={tyre.id}>
                             <td className="font-medium">{tyre.brand}</td>
+                            <td>{tyre.type || '-'}</td>
                             <td>{tyre.size}</td>
                             <td>{getRimSize(tyre.size)}</td>
                             <td>{getStoreName(tyre.storeId)}</td>

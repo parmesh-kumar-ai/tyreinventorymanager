@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react';
-import { useInventory } from '../hooks/useInventory';
 import { ShoppingCart, PackagePlus, BarChart3, TrendingUp } from 'lucide-react';
 import InventoryCharts from './InventoryCharts';
 import InventoryGrowthChart from './InventoryGrowthChart';
+import type { Tyre, Transaction } from '../types';
 
-export default function Dashboard() {
-    const { inventory, transactions, managedBrands } = useInventory();
+interface DashboardProps {
+    inventory: Tyre[];
+    transactions: Transaction[];
+    managedBrands: string[];
+}
+
+export default function Dashboard({ inventory, transactions, managedBrands }: DashboardProps) {
     const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
     const [chartFilter, setChartFilter] = useState<'year' | 'month' | 'all'>('year');
 

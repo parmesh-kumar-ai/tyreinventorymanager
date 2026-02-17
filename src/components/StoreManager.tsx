@@ -1,12 +1,20 @@
 import { useState, useMemo } from 'react';
 import { Store, MapPin, Plus, Trash2, Edit2, X } from 'lucide-react';
-import { useInventory } from '../hooks/useInventory';
 import InventoryList from './InventoryList';
 import { PREDEFINED_BRANDS } from '../constants';
-import type { Store as StoreType } from '../types';
+import type { Store as StoreType, Tyre } from '../types';
 
-export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
-    const { stores, addStore, updateStore, deleteStore, inventory, deleteTyre } = useInventory();
+interface StoreManagerProps {
+    stores: StoreType[];
+    inventory: Tyre[];
+    onAddStore: (store: Omit<StoreType, 'id'>) => void;
+    onUpdateStore: (id: string, store: Omit<StoreType, 'id'>) => void;
+    onDeleteStore: (id: string) => void;
+    onDeleteTyre: (id: string) => void;
+    onAddTyre: () => void;
+}
+
+export default function StoreManager({ stores, inventory, onAddStore, onUpdateStore, onDeleteStore, onDeleteTyre, onAddTyre }: StoreManagerProps) {
 
     // UI State
     const [isAdding, setIsAdding] = useState(false);
@@ -20,6 +28,7 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedBrand, setSelectedBrand] = useState<string>('');
     const [selectedRimSize, setSelectedRimSize] = useState<string>('');
+    const [selectedType, setSelectedType] = useState<string>('');
 
     const resetForm = () => {
         setFormData({ name: '', location: '' });
@@ -42,9 +51,9 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
         e.preventDefault();
         if (formData.name && formData.location) {
             if (editingStore) {
-                updateStore(editingStore.id, formData);
+                onUpdateStore(editingStore.id, formData);
             } else {
-                addStore(formData);
+                onAddStore(formData);
             }
             resetForm();
         }
@@ -52,7 +61,7 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
 
     const handleDeleteStore = () => {
         if (editingStore && window.confirm(`Are you sure you want to delete "${editingStore.name}"? Tyres in this store will remain but lose their store association.`)) {
-            deleteStore(editingStore.id);
+            onDeleteStore(editingStore.id);
             if (selectedStoreId === editingStore.id) {
                 setSelectedStoreId(null);
             }
@@ -82,7 +91,13 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
             if (match) rims.add(match[0].toUpperCase());
         });
         return Array.from(rims).sort();
+        return Array.from(rims).sort();
     }, [inventory]);
+
+    // Extract unique Tyre Types
+    const uniqueTypes = useMemo(() => Array.from(new Set(
+        inventory.map(t => t.type).filter(Boolean) as string[]
+    )).sort(), [inventory]);
 
     // Filter inventory based on selection and filters
     const filteredInventory = inventory.filter(tyre => {
@@ -90,6 +105,7 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
         const matchesSearch = tyre.size.toLowerCase().includes(searchTerm.toLowerCase()) ||
             tyre.brand.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesBrand = selectedBrand ? tyre.brand === selectedBrand : true;
+        const matchesType = selectedType ? tyre.type === selectedType : true;
 
         let matchesRim = true;
         if (selectedRimSize) {
@@ -98,7 +114,7 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
             matchesRim = rim === selectedRimSize;
         }
 
-        return matchesStore && matchesSearch && matchesBrand && matchesRim;
+        return matchesStore && matchesSearch && matchesBrand && matchesRim && matchesType;
     });
 
     const isModalOpen = isAdding || !!editingStore;
@@ -260,6 +276,16 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
                             {uniqueRimSizes.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                     </div>
+                    <div className="form-group" style={{ flex: 1, minWidth: '120px' }}>
+                        <select
+                            value={selectedType}
+                            onChange={(e) => setSelectedType(e.target.value)}
+                            style={{ padding: '0.5rem', width: '100%' }}
+                        >
+                            <option value="">All Types</option>
+                            {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
                 </div>
 
                 <InventoryList
@@ -268,7 +294,7 @@ export default function StoreManager({ onAddTyre }: { onAddTyre: () => void }) {
                     onEdit={() => { }} // Disabled for now in this view
                     onDelete={(id) => {
                         if (window.confirm('Are you sure you want to delete this tyre?')) {
-                            deleteTyre(id);
+                            onDeleteTyre(id);
                         }
                     }}
                 />

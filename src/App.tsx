@@ -10,14 +10,17 @@ import Sidebar from './components/Sidebar';
 import TyreForm from './components/TyreForm';
 import LoginScreen from './components/LoginScreen';
 import AccountManager from './components/AccountManager';
+import WarrantyDashboard from './components/WarrantyDashboard';
+import ClaimsDashboard from './components/ClaimsDashboard';
 import { useInventory } from './hooks/useInventory';
 import type { Tyre } from './types';
-import { Plus, UserCircle, Settings } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import BrandInventoryView from './components/BrandInventoryView';
 
 function App() {
-  const [user, loading, error] = useAuthState(auth);
-  const inventoryHook = useInventory();
+  const [user, loading] = useAuthState(auth);
+  // Pass user ID to inventory hook for data isolation
+  const inventoryHook = useInventory(user?.uid);
   const {
     inventory,
     stores,
@@ -33,7 +36,7 @@ function App() {
   useBackup(inventoryHook);
 
   // View State
-  const [currentView, setCurrentView] = useState<'inventory' | 'stores' | 'history' | 'brand'>(() => {
+  const [currentView, setCurrentView] = useState<'inventory' | 'stores' | 'history' | 'brand' | 'warranty' | 'claims'>(() => {
     return (localStorage.getItem('app-current-view') as any) || 'inventory';
   });
 
@@ -50,6 +53,7 @@ function App() {
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [selectedRimSize, setSelectedRimSize] = useState<string>('');
   const [selectedStore, setSelectedStore] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<string>('');
 
   const [editingTyre, setEditingTyre] = useState<Tyre | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -78,11 +82,17 @@ function App() {
     return Array.from(rims).sort();
   }, [inventory]);
 
+  // Extract unique Tyre Types
+  const uniqueTypes = useMemo(() => Array.from(new Set(
+    inventory.map(t => t.type).filter(Boolean) as string[]
+  )).sort(), [inventory]);
+
   const filteredInventory = inventory.filter(tyre => {
     const matchesSearch = tyre.size.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tyre.brand.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBrand = selectedBrand ? tyre.brand === selectedBrand : true;
     const matchesStore = selectedStore ? tyre.storeId === selectedStore : true;
+    const matchesType = selectedType ? tyre.type === selectedType : true;
 
     let matchesRim = true;
     if (selectedRimSize) {
@@ -91,7 +101,7 @@ function App() {
       matchesRim = rim === selectedRimSize;
     }
 
-    return matchesSearch && matchesBrand && matchesStore && matchesRim;
+    return matchesSearch && matchesBrand && matchesStore && matchesRim && matchesType;
   });
 
   const handleAddClick = () => {
@@ -123,11 +133,60 @@ function App() {
   const renderContent = () => {
     switch (currentView) {
       case 'stores':
-        return <StoreManager onAddTyre={handleAddClick} />;
+        return (
+          <StoreManager
+            stores={stores}
+            inventory={inventory}
+            onAddStore={inventoryHook.addStore}
+            onUpdateStore={inventoryHook.updateStore}
+            onDeleteStore={inventoryHook.deleteStore}
+            onDeleteTyre={deleteTyre}
+            onAddTyre={handleAddClick}
+          />
+        );
       case 'history':
-        return <HistoryDashboard />;
+        return (
+          <HistoryDashboard
+            inventory={inventory}
+            transactions={inventoryHook.transactions}
+            stores={stores}
+            managedBrands={managedBrands}
+            onDeleteTransaction={inventoryHook.deleteTransaction}
+            onUpdateTransaction={inventoryHook.updateTransaction}
+          />
+        );
       case 'brand':
-        return <BrandInventoryView selectedBrand={viewBrand} onEdit={handleEditClick} onAddTyre={handleAddClick} />;
+        return (
+          <BrandInventoryView
+            selectedBrand={viewBrand}
+            inventory={inventory}
+            stores={stores}
+            managedBrands={managedBrands}
+            onEdit={handleEditClick}
+            onDeleteTyre={deleteTyre}
+            onAddTyre={handleAddClick}
+          />
+        );
+      case 'warranty':
+        return (
+          <WarrantyDashboard
+            warranties={inventoryHook.warranties}
+            onAddWarranty={inventoryHook.addWarranty}
+            onUpdateWarranty={inventoryHook.updateWarranty}
+            onDeleteWarranty={inventoryHook.deleteWarranty}
+            managedBrands={managedBrands}
+          />
+        );
+      case 'claims':
+        return (
+          <ClaimsDashboard
+            claims={inventoryHook.claims}
+            onAddClaim={inventoryHook.addClaim}
+            onUpdateClaim={inventoryHook.updateClaim}
+            onDeleteClaim={inventoryHook.deleteClaim}
+            managedBrands={managedBrands}
+          />
+        );
       default:
         return (
           <div className="dashboard-container">
@@ -147,7 +206,11 @@ function App() {
               </div>
             </div>
 
-            <Dashboard />
+            <Dashboard
+              inventory={inventory}
+              transactions={inventoryHook.transactions}
+              managedBrands={managedBrands}
+            />
 
             <div className="section-card" style={{ marginTop: '2rem' }}>
               <div className="page-header" style={{ marginBottom: '1rem' }}>
@@ -192,6 +255,16 @@ function App() {
                   >
                     <option value="">All Stores</option>
                     {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ flex: 1, minWidth: '150px' }}>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    style={{ padding: '0.5rem', width: '100%' }}
+                  >
+                    <option value="">All Types</option>
+                    {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -243,6 +316,9 @@ function App() {
           initialData={editingTyre}
           onSubmit={handleFormSubmit}
           onCancel={() => setIsFormOpen(false)}
+          stores={stores}
+          managedBrands={managedBrands}
+          inventory={inventory}
         />
       )}
 

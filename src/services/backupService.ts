@@ -1,19 +1,27 @@
-export const GOOGLE_DRIVE_FILE_NAME = 'tyre-inventory-backup.json';
+// Prefix for backup files to identify them
+const BACKUP_FILE_PREFIX = 'tyre-inventory-backup-';
 
 interface BackupData {
     inventory: any[];
     stores: any[];
     transactions: any[];
     managedBrands: string[];
+    warranties?: any[];
+    claims?: any[];
     timestamp: string;
 }
 
-export const uploadToDrive = async (accessToken: string, data: BackupData): Promise<{ success: boolean; error?: string }> => {
+interface DriveFile {
+    id: string;
+    name: string;
+    createdTime?: string;
+}
+
+export const listBackups = async (accessToken: string): Promise<DriveFile[]> => {
     try {
-        // 1. Search for existing file
-        const query = `name='${GOOGLE_DRIVE_FILE_NAME}' and trashed=false`;
-        const searchResponse = await fetch(
-            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`,
+        const query = `name contains '${BACKUP_FILE_PREFIX}' and trashed=false`;
+        const response = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=createdTime desc&fields=files(id, name, createdTime)`,
             {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -21,96 +29,80 @@ export const uploadToDrive = async (accessToken: string, data: BackupData): Prom
             }
         );
 
-        if (!searchResponse.ok) {
-            const errText = await searchResponse.text();
-            console.error('Drive Search Error Body:', errText);
-            if (searchResponse.status === 401) return { success: false, error: 'Token expired. Please Unlink and Link again.' };
-            return { success: false, error: `Search query failed (${searchResponse.status}): ${errText}` };
-        }
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.files || [];
+    } catch (error) {
+        console.error('Failed to list backups:', error);
+        return [];
+    }
+};
 
-        const searchResult = await searchResponse.json();
+export const deleteFile = async (accessToken: string, fileId: string): Promise<boolean> => {
+    try {
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+            method: 'DELETE',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+        return response.ok;
+    } catch (error) {
+        console.error('Failed to delete file:', error);
+        return false;
+    }
+};
 
+export const uploadToDrive = async (accessToken: string, data: BackupData): Promise<{ success: boolean; error?: string }> => {
+    try {
+        const fileName = `${BACKUP_FILE_PREFIX}${new Date(data.timestamp).toISOString().replace(/[:.]/g, '-')}.json`;
         const fileContent = JSON.stringify(data, null, 2);
 
-        // ... rest of the function (update/create logic is fine, but let's just replace the search block to be safe)
-        // Actually, to be safe and clean, I will just return the search part if I can, but the tool requires contiguous replacement.
-        // The instruction says "Modify uploadToDrive". I will replace the BEGINNING of the function up to the searchResult usage.
+        // 1. Create new backup file
+        const metadata = {
+            name: fileName,
+            mimeType: 'application/json',
+        };
 
-        // Wait, I need to be careful with the instruction. I'll replace the block from the start of the function to where searchResult is defined.
+        const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(metadata)
+        });
 
-        // ... (Re-reading the tool definition: "StartLine and EndLine should specify a range of lines containing precisely the instances of TargetContent")
-        // I will target the specific error handling block.
-
-
-
-        // 2. If file exists, update it. Else, create new.
-        if (searchResult.files && searchResult.files.length > 0) {
-            const fileId = searchResult.files[0].id;
-            console.log('Existing backup found. Updating:', fileId);
-
-            // For update, we use upload API with PATCH
-            const updateResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-                method: 'PATCH',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: fileContent
-            });
-
-            if (!updateResponse.ok) {
-                const errText = await updateResponse.text();
-                try {
-                    const errJson = JSON.parse(errText);
-                    return { success: false, error: `Update failed: ${errJson.error?.message || updateResponse.statusText}` };
-                } catch {
-                    return { success: false, error: `Update failed: ${updateResponse.statusText}` };
-                }
-            }
-            console.log('Backup updated successfully:', fileId);
-
-        } else {
-            console.log('Creating new backup file...');
-            // Step 1: Create file with metadata (but no content yet)
-            const metadata = {
-                name: GOOGLE_DRIVE_FILE_NAME,
-                mimeType: 'application/json',
-            };
-
-            const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(metadata)
-            });
-
-            if (!createResponse.ok) {
-                const errText = await createResponse.text();
-                return { success: false, error: `Metadata creation failed: ${createResponse.statusText}` };
-            }
-
-            const fileData = await createResponse.json();
-            const newFileId = fileData.id;
-            console.log('File metadata created with ID:', newFileId);
-
-            // Step 2: Upload content to the new file
-            const uploadResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
-                method: 'PATCH',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: fileContent
-            });
-
-            if (!uploadResponse.ok) {
-                const errText = await uploadResponse.text();
-                return { success: false, error: `Content upload failed: ${uploadResponse.statusText}` };
-            }
-            console.log('New backup content uploaded successfully');
+        if (!createResponse.ok) {
+            return { success: false, error: `Metadata creation failed: ${createResponse.statusText}` };
         }
+
+        const fileData = await createResponse.json();
+        const newFileId = fileData.id;
+
+        // 2. Upload content
+        const uploadResponse = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${newFileId}?uploadType=media`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: fileContent
+        });
+
+        if (!uploadResponse.ok) {
+            return { success: false, error: `Content upload failed: ${uploadResponse.statusText}` };
+        }
+
+        // 3. Rotate Backups (Keep last 10)
+        const backups = await listBackups(accessToken);
+        if (backups.length > 10) {
+            const filesToDelete = backups.slice(10); // Since sorted by createdTime desc, these are oldest
+            for (const file of filesToDelete) {
+                await deleteFile(accessToken, file.id);
+            }
+        }
+
         return { success: true };
     } catch (error: any) {
         console.error('Backup failed:', error);
@@ -118,40 +110,39 @@ export const uploadToDrive = async (accessToken: string, data: BackupData): Prom
     }
 };
 
-export const restoreFromDrive = async (accessToken: string): Promise<BackupData | null> => {
+export const restoreFromDrive = async (accessToken: string, fileId?: string): Promise<BackupData | null> => {
     try {
-        const query = `name='${GOOGLE_DRIVE_FILE_NAME}' and trashed=false`;
-        const searchResponse = await fetch(
-            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}`,
+        let targetFileId = fileId;
+
+        // If no fileId provided, get the latest one
+        if (!targetFileId) {
+            const backups = await listBackups(accessToken);
+            if (backups.length > 0) {
+                targetFileId = backups[0].id;
+            }
+        }
+
+        if (!targetFileId) {
+            console.warn('No backup file found.');
+            return null;
+        }
+
+        const downloadResponse = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${targetFileId}?alt=media`,
             {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                 },
             }
         );
-        const searchResult = await searchResponse.json();
 
-        if (searchResult.files && searchResult.files.length > 0) {
-            const fileId = searchResult.files[0].id;
-            const downloadResponse = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-                {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                }
-            );
-
-            if (!downloadResponse.ok) {
-                console.error('Failed to download file:', downloadResponse.statusText);
-                return null;
-            }
-
-            const data = await downloadResponse.json();
-            return data as BackupData;
+        if (!downloadResponse.ok) {
+            console.error('Failed to download file:', downloadResponse.statusText);
+            return null;
         }
-        console.warn('No backup file found with name:', GOOGLE_DRIVE_FILE_NAME);
-        return null; // No backup found
+
+        const data = await downloadResponse.json();
+        return data as BackupData;
     } catch (error) {
         console.error('Restore failed:', error);
         return null;

@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react';
 import { updateProfile, updateEmail, updatePassword, deleteUser, GoogleAuthProvider, linkWithPopup, signInWithPopup, getAuth, EmailAuthProvider, reauthenticateWithCredential, unlink, signOut } from 'firebase/auth';
 import type { User } from 'firebase/auth';
-import { UploadCloud, DownloadCloud, FileDown, Trash2, UserCog, X, Save, AlertTriangle, FileUp, Unlink, Phone, LogOut } from 'lucide-react';
-import { uploadToDrive, restoreFromDrive } from '../services/backupService';
+import { UploadCloud, DownloadCloud, FileDown, Trash2, UserCog, X, Save, AlertTriangle, FileUp, Unlink, LogOut } from 'lucide-react';
+import { uploadToDrive, restoreFromDrive, listBackups } from '../services/backupService';
 import type { useInventory } from '../hooks/useInventory';
 
 interface AccountManagerProps {
@@ -259,6 +259,22 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => localStorage.getItem('autoBackupEnabled') === 'true');
+    const [availableBackups, setAvailableBackups] = useState<any[]>([]);
+
+    const fetchBackupsList = async () => {
+        setLoading(true);
+        const token = sessionStorage.getItem('google_access_token');
+        if (!token) {
+            setError('google_token_missing');
+            setLoading(false);
+            return;
+        }
+        const files = await listBackups(token);
+        setAvailableBackups(files);
+        setLoading(false);
+    };
+
     if (!isOpen) return null;
 
 
@@ -369,10 +385,20 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
 
                 if (newInventory.length > 0) {
                     if (inventoryHook.importData) {
+                        // Generate transactions for imported items
+                        const newTransactions: any[] = newInventory.map(item => ({
+                            id: crypto.randomUUID(),
+                            tyreId: item.id,
+                            type: 'IN',
+                            quantity: item.quantity,
+                            date: new Date().toISOString(),
+                            storeId: item.storeId
+                        }));
+
                         const backupData = {
                             inventory: newInventory,
                             stores: inventoryHook.stores,
-                            transactions: [],
+                            transactions: newTransactions,
                             managedBrands: [...new Set([...inventoryHook.managedBrands, ...newInventory.map(i => i.brand)])],
                             timestamp: new Date().toISOString()
                         };
@@ -408,6 +434,8 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
             stores: inventoryHook.stores,
             transactions: inventoryHook.transactions,
             managedBrands: inventoryHook.managedBrands,
+            warranties: inventoryHook.warranties,
+            claims: inventoryHook.claims,
             timestamp: new Date().toISOString()
         });
 
@@ -416,7 +444,7 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
         setLoading(false);
     };
 
-    const handleRestore = async () => {
+    const handleRestore = async (fileId?: string) => {
         if (!confirm('WARNING: This will OVERWRITE your current local inventory with the data from Google Drive. Are you sure?')) return;
 
         setLoading(true);
@@ -429,16 +457,17 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
             return;
         }
 
-        const data = await restoreFromDrive(token);
+        const data = await restoreFromDrive(token, fileId);
         if (data) {
             if (inventoryHook.importData) {
                 inventoryHook.importData(data);
                 setMessage('Data restored successfully!');
+                // Close modal or refresh list if needed
             } else {
                 setError('Import function missing from hook. Please contact developer.');
             }
         } else {
-            setError('No backup found in Google Drive.');
+            setError('No backup found or failed to download.');
         }
         setLoading(false);
     };
@@ -564,6 +593,26 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
                                 {isGoogleLinked ? (
                                     <>
                                         <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.875rem' }}>Account linked. You can backup your inventory.</p>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', padding: '0.75rem', background: '#f1f5f9', borderRadius: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Auto-Backup (Every 30 mins)</span>
+                                            <button
+                                                onClick={() => {
+                                                    const newState = !autoBackupEnabled;
+                                                    setAutoBackupEnabled(newState);
+                                                    localStorage.setItem('autoBackupEnabled', String(newState));
+                                                }}
+                                                style={{
+                                                    background: autoBackupEnabled ? '#10b981' : '#cbd5e1',
+                                                    width: '44px', height: '24px', borderRadius: '12px', border: 'none', position: 'relative', cursor: 'pointer', transition: 'background 0.2s'
+                                                }}
+                                            >
+                                                <div style={{
+                                                    background: 'white', width: '20px', height: '20px', borderRadius: '50%', position: 'absolute', top: '2px', left: autoBackupEnabled ? '22px' : '2px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                                                }} />
+                                            </button>
+                                        </div>
+
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                             <button onClick={handleBackup} disabled={loading} className="btn" style={{ background: 'var(--primary)', color: 'white', flex: 1, justifyContent: 'center' }}>
                                                 <UploadCloud size={18} style={{ marginRight: '0.5rem' }} /> Back Up Now
@@ -585,14 +634,44 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
                             <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1.5rem' }}>
                                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}><DownloadCloud size={20} color="#f59e0b" /> Restore Data</h3>
                                 <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.875rem' }}>Overwrites local data.</p>
-                                <div style={{ display: 'grid', gap: '0.5rem' }}>
-                                    <button onClick={handleRestore} disabled={loading} className="btn" style={{ background: '#f59e0b', color: 'white', width: '100%', justifyContent: 'center' }}>
-                                        <DownloadCloud size={18} style={{ marginRight: '0.5rem' }} /> From Google Drive
-                                    </button>
 
+                                {isGoogleLinked && (
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <button
+                                            onClick={fetchBackupsList}
+                                            disabled={loading}
+                                            className="btn"
+                                            style={{ background: '#f59e0b', border: 'none', color: 'white', width: '100%', justifyContent: 'center', marginBottom: '0.5rem' }}
+                                        >
+                                            Fetch Available Backups
+                                        </button>
+
+                                        {availableBackups.length > 0 && (
+                                            <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '0.5rem', background: '#f8fafc' }}>
+                                                {availableBackups.map(file => (
+                                                    <div
+                                                        key={file.id}
+                                                        onClick={() => handleRestore(file.id)}
+                                                        style={{
+                                                            padding: '0.75rem', borderBottom: '1px solid #e2e8f0', cursor: 'pointer', fontSize: '0.875rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                            transition: 'background 0.1s'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    >
+                                                        <span>{new Date(file.createdTime || '').toLocaleString()}</span>
+                                                        <DownloadCloud size={14} color="#64748b" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'grid', gap: '0.5rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
                                         <div style={{ height: '1px', background: '#e2e8f0', flex: 1 }}></div>
-                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>OR</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>OR IMPORT FILE</span>
                                         <div style={{ height: '1px', background: '#e2e8f0', flex: 1 }}></div>
                                     </div>
 
@@ -610,12 +689,39 @@ export default function AccountManager({ user, isOpen, onClose, inventoryHook }:
                             </div>
 
                             <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1.5rem' }}>
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#6366f1' }}>
+                                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
+                                    </svg>
+                                    Sync History
+                                </h3>
+                                <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.875rem' }}>Fix discrepancies between Stock Count and History.</p>
+                                <button
+                                    onClick={() => {
+                                        if (inventoryHook.reconcileTransactions) {
+                                            const count = inventoryHook.reconcileTransactions();
+                                            if (count > 0) setMessage(`Fixed ${count} discrepancies in history.`);
+                                            else setMessage('History is already in sync.');
+                                        } else {
+                                            setError('Update not applied yet. Please reload.');
+                                        }
+                                    }}
+                                    className="btn"
+                                    style={{ background: '#6366f1', color: 'white', width: '100%', justifyContent: 'center' }}
+                                >
+                                    Sync Now
+                                </button>
+                            </div>
+
+                            <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1.5rem' }}>
                                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}><FileDown size={20} color="#10b981" /> Export CSV</h3>
                                 <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.875rem' }}>Download your inventory as a spreadsheet file.</p>
                                 <button onClick={handleExportCSV} className="btn" style={{ background: '#10b981', color: 'white', width: '100%', justifyContent: 'center' }}>
                                     <FileDown size={18} style={{ marginRight: '0.5rem' }} /> Download CSV
                                 </button>
                             </div>
+
+
                         </div>
                     )}
 
