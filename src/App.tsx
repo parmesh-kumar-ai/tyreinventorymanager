@@ -1,16 +1,23 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from './lib/firebase';
+import { useBackup } from './hooks/useBackup';
 import Dashboard from './components/Dashboard';
 import InventoryList from './components/InventoryList';
 import StoreManager from './components/StoreManager';
 import HistoryDashboard from './components/HistoryDashboard';
 import Sidebar from './components/Sidebar';
 import TyreForm from './components/TyreForm';
+import LoginScreen from './components/LoginScreen';
+import AccountManager from './components/AccountManager';
 import { useInventory } from './hooks/useInventory';
 import type { Tyre } from './types';
-import { Plus } from 'lucide-react';
+import { Plus, UserCircle, Settings } from 'lucide-react';
 import BrandInventoryView from './components/BrandInventoryView';
 
 function App() {
+  const [user, loading, error] = useAuthState(auth);
+  const inventoryHook = useInventory();
   const {
     inventory,
     stores,
@@ -20,11 +27,23 @@ function App() {
     deleteTyre,
     addBrand,
     removeBrand
-  } = useInventory();
+  } = inventoryHook;
+
+  // Auto-run backup service
+  useBackup(inventoryHook);
 
   // View State
-  const [currentView, setCurrentView] = useState<'inventory' | 'stores' | 'history' | 'brand'>('inventory');
+  const [currentView, setCurrentView] = useState<'inventory' | 'stores' | 'history' | 'brand'>(() => {
+    return (localStorage.getItem('app-current-view') as any) || 'inventory';
+  });
+
+  // Persist View
+  useEffect(() => {
+    localStorage.setItem('app-current-view', currentView);
+  }, [currentView]);
+
   const [viewBrand, setViewBrand] = useState<string | null>(null);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
 
   // Inventory Filter State
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,17 +131,20 @@ function App() {
       default:
         return (
           <div className="dashboard-container">
-            <div className="page-header">
-              <h1 className="page-title">Inventory Dashboard</h1>
-
-              <div style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--primary)' }}>
-                Total Stock: {inventory.reduce((acc, item) => acc + item.quantity, 0)}
+            <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <h1 className="page-title" style={{ margin: 0 }}>Inventory Dashboard</h1>
+                <span style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--primary)', lineHeight: 1 }}>
+                  (Total: {inventory.reduce((acc, item) => acc + item.quantity, 0)})
+                </span>
               </div>
 
-              <button onClick={handleAddClick} className="btn btn-primary">
-                <Plus size={20} />
-                Add New Tyre
-              </button>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button onClick={handleAddClick} className="btn btn-primary">
+                  <Plus size={20} />
+                  Add New Tyre
+                </button>
+              </div>
             </div>
 
             <Dashboard />
@@ -187,6 +209,18 @@ function App() {
     }
   };
 
+  if (loading) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="app-layout">
       <Sidebar
@@ -197,6 +231,8 @@ function App() {
         onBrandSelect={handleBrandSelect}
         onAddBrand={addBrand}
         onRemoveBrand={removeBrand}
+        user={user}
+        onManageAccount={() => setIsAccountOpen(true)}
       />
       <main className="main-content">
         {renderContent()}
@@ -207,6 +243,15 @@ function App() {
           initialData={editingTyre}
           onSubmit={handleFormSubmit}
           onCancel={() => setIsFormOpen(false)}
+        />
+      )}
+
+      {isAccountOpen && (
+        <AccountManager
+          user={user}
+          isOpen={isAccountOpen}
+          onClose={() => setIsAccountOpen(false)}
+          inventoryHook={inventoryHook}
         />
       )}
     </div>

@@ -568,12 +568,6 @@ body {
   padding: 1em 0.5em !important;
 }
 
-.react-calendar__tile--active {
-  background: var(--primary) !important;
-  color: white !important;
-  border-radius: 0.5rem;
-}
-
 .react-calendar__tile--now {
   background: #eff6ff !important;
   border-radius: 0.5rem;
@@ -582,6 +576,15 @@ body {
 .react-calendar__tile:enabled:hover,
 .react-calendar__tile:enabled:focus {
   background-color: #f3f4f6 !important;
+  border-radius: 0.5rem;
+}
+
+.react-calendar__tile--active,
+.react-calendar__tile--active:enabled,
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background: var(--primary) !important;
+  color: white !important;
   border-radius: 0.5rem;
 }
 

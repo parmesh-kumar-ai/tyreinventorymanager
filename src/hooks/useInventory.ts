@@ -7,28 +7,19 @@ const STORAGE_KEY_STORES = 'tyre-stores-data';
 const STORAGE_KEY_TRANSACTIONS = 'tyre-transactions-data';
 const STORAGE_KEY_BRANDS = 'tyre-brands-list';
 
-const initialStores: Store[] = [
-    { id: '1', name: 'Main Warehouse', location: 'New York' },
-    { id: '2', name: 'Downtown Shop', location: 'City Center' },
-];
+const initialStores: Store[] = [];
 
-const initialInventory: Tyre[] = [
-    { id: '1', storeId: '1', brand: 'Michelin', size: '205/55 R16', quantity: 15 },
-    { id: '2', storeId: '1', brand: 'Continental', size: '225/45 R17', quantity: 8 },
-    { id: '3', storeId: '2', brand: 'Yokohama', size: '195/65 R15', quantity: 20 },
-    { id: '4', storeId: '2', brand: 'Bridgestone', size: '215/60 R16', quantity: 5 },
-    { id: '5', storeId: '1', brand: 'Apollo', size: '185/65 R14', quantity: 30 },
-];
+const initialInventory: Tyre[] = [];
 
 export const useInventory = () => {
     const [inventory, setInventory] = useState<Tyre[]>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_INVENTORY);
-        return stored ? JSON.parse(stored) : initialInventory;
+        return stored ? JSON.parse(stored) : [];
     });
 
     const [stores, setStores] = useState<Store[]>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_STORES);
-        return stored ? JSON.parse(stored) : initialStores;
+        return stored ? JSON.parse(stored) : [];
     });
 
     const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -122,11 +113,47 @@ export const useInventory = () => {
         setManagedBrands(managedBrands.filter(b => b !== brand));
     };
 
+    const clearAllData = () => {
+        setInventory([]);
+        setStores([]);
+        setTransactions([]);
+        setManagedBrands(PREDEFINED_BRANDS);
+        localStorage.removeItem(STORAGE_KEY_INVENTORY);
+        localStorage.removeItem(STORAGE_KEY_STORES);
+        localStorage.removeItem(STORAGE_KEY_TRANSACTIONS);
+        localStorage.removeItem(STORAGE_KEY_BRANDS);
+    };
+
+    const importData = (data: any) => {
+        if (data.inventory) setInventory(data.inventory);
+        if (data.stores) setStores(data.stores);
+        if (data.transactions) setTransactions(data.transactions);
+        if (data.managedBrands) setManagedBrands(data.managedBrands);
+    };
+
+    const STORAGE_KEY_SHOP_DETAILS = 'tyre-shop-details';
+
+    const [shopDetails, setShopDetails] = useState<{ phone: string }>(() => {
+        const stored = localStorage.getItem(STORAGE_KEY_SHOP_DETAILS);
+        return stored ? JSON.parse(stored) : { phone: '' };
+    });
+
+    useEffect(() => {
+        localStorage.setItem(STORAGE_KEY_SHOP_DETAILS, JSON.stringify(shopDetails));
+    }, [shopDetails]);
+
+    const updateShopDetails = (details: Partial<{ phone: string }>) => {
+        setShopDetails(prev => ({ ...prev, ...details }));
+    };
+
+    // ... (rest of the file functions)
+
     return {
         inventory,
         stores,
         transactions,
         managedBrands,
+        shopDetails,
         addTyre,
         updateTyre,
         deleteTyre,
@@ -134,6 +161,9 @@ export const useInventory = () => {
         updateStore,
         deleteStore,
         addBrand,
-        removeBrand
+        removeBrand,
+        updateShopDetails,
+        clearAllData,
+        importData
     };
 };

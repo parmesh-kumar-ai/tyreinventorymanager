@@ -11,6 +11,7 @@ type ViewMode = 'daily' | 'weekly' | 'monthly' | 'annual' | 'all-time';
 export default function HistoryDashboard() {
     const { transactions, stores, inventory, managedBrands } = useInventory();
     const [date, setDate] = useState<Date>(new Date());
+    const [activeStartDate, setActiveStartDate] = useState<Date | undefined>(new Date());
     const [viewMode, setViewMode] = useState<ViewMode>('all-time');
     const [selectedStoreId, setSelectedStoreId] = useState<string>('');
     const [selectedBrand, setSelectedBrand] = useState<string>('');
@@ -120,9 +121,11 @@ export default function HistoryDashboard() {
                             setSelectedTransactionId(null);
                         }}
                         value={date}
-                        onClickYear={(value) => { setDate(value); setViewMode('annual'); }}
-                        onClickMonth={(value) => { setDate(value); setViewMode('monthly'); }}
-                        onClickDay={(value) => { setDate(value); setViewMode('daily'); }}
+                        activeStartDate={activeStartDate}
+                        onActiveStartDateChange={({ activeStartDate }) => setActiveStartDate(activeStartDate || undefined)}
+                        onClickYear={(value) => { setDate(value); setActiveStartDate(value); setViewMode('monthly'); }}
+                        onClickMonth={(value) => { setDate(value); setActiveStartDate(value); setViewMode('daily'); }}
+                        onClickDay={(value) => { setDate(value); setActiveStartDate(value); setViewMode('daily'); }}
                         view={viewMode === 'annual' || viewMode === 'all-time' ? 'decade' : viewMode === 'monthly' ? 'year' : 'month'}
                     />
 
@@ -178,7 +181,9 @@ export default function HistoryDashboard() {
                                         key={t.id}
                                         className="transaction-card"
                                         onClick={() => {
-                                            setDate(parseISO(t.date));
+                                            const d = parseISO(t.date);
+                                            setDate(d);
+                                            setActiveStartDate(d);
                                             setViewMode('daily');
                                             setSelectedTransactionId(t.id);
                                         }}
